@@ -7,3 +7,6 @@
 # 数据处理
 数据处理部分，主要是参考[这里](https://github.com/HowieMa/lstm_pm_pytorch)，对penn action数据集的处理。
 
+
+训练脚本:
+python manage.py --lr=0.01 --batch_size=64 --epochs=10 --models=./models

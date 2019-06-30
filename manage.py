@@ -45,7 +45,7 @@ train_dataset = DataLoader(train_data, batch_size=args.batch_size, shuffle=True)
 net = lstmposemachine()
 
 # gpu support
-device = torch.device("cpu")
+device = torch.device("cuda")
 device_ids = [0, 1, 2, 3]
 if args.cuda & torch.cuda.is_available():
     net = net.cuda(device_ids[0])
@@ -85,8 +85,6 @@ def train():
                 print('--loss ' + str(float(total_loss)))
                 print('--acc  ')
                 print(acc)
-
-
 
 # do train and test here
 if __name__ == '__main__':
