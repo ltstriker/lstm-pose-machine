@@ -41,16 +41,20 @@ train_data = Penn_Data(data_dir=train_data_dir, transform=transform)
 print('Train dataset size:' + str(len(train_data)))
 train_dataset = DataLoader(train_data, batch_size=args.batch_size, shuffle=True)
 
-#define model
-net = lstmposemachine()
 
 # gpu support
-device = torch.device("cuda")
-device_ids = [0, 1, 2, 3]
+device = torch.device("cpu")
+device_ids = [0]
+
 if args.cuda & torch.cuda.is_available():
-    net = net.cuda(device_ids[0])
     device = torch.device("cuda")
+    #define model
+    net = lstmposemachine(out=7, stage=3, device=device)
+    net = net.cuda(device_ids[0])
     net = nn.DataParallel(net, device_ids=device_ids)
+else:
+    #define model
+    net = lstmposemachine(out=7, stage=3, device=device)
 
 print(device)
 

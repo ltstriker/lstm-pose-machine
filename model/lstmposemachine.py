@@ -7,7 +7,7 @@ from scipy.stats import multivariate_normal
 
 
 class lstmposemachine(nn.Module):
-    def __init__(self, out=7, stage=3):
+    def __init__(self, out=7, stage=3, device=torch.device("cpu")):
         # 注意7类里面，每类输出3个值，x,y坐标，visible值
         super(lstmposemachine, self).__init__()
         # image: seq(5), 3, 270, 480
@@ -15,22 +15,22 @@ class lstmposemachine(nn.Module):
         self.out=out
         self.stage=stage
 
-        self.initnet = InitNet()
+        self.initnet = self.InitNet()
 
-        self.convnet2 = ConvNet2()
-        self.lstm = LSTM()
-        self.convnet3 = ConvNet3()
+        self.convnet2 = self.ConvNet2()
+        self.lstm = self.LSTM()
+        self.convnet3 = self.ConvNet3()
         
-        self.gaussianmap = genarate_gaussianmap()
+        self.gaussianmap = self.genarate_gaussianmap().to(device)
 
-        self.lossnet = fuconLoss()
+        self.lossnet = self.fuconLoss()
         # self.testNet =  torch.nn.Sequential(
         #                     torch.nn.Linear(5*3*270*480, 100),
         #                     torch.nn.ReLU(),
         #                     torch.nn.Linear(100, 3*13*5)
         #                 )
 
-    def InitNet():
+    def InitNet(self):
         # convnet1(with dropout) and loss init
         # an additional ConvNet1
         
@@ -38,7 +38,7 @@ class lstmposemachine(nn.Module):
                     nn.Conv2d(
                         in_channels=3,      # input height
                         out_channels=16,    # n_filters
-                        kernel_size=5,      # filter size
+                        kernel_size=3,      # filter size
                         stride=1,           # filter movement/step
                         padding=2,      # 如果想要 con2d 出来的图片长宽没有变化, padding=(kernel_size-1)/2 当 stride=1
                     ),      # output shape (16, 28, 28)
@@ -47,12 +47,12 @@ class lstmposemachine(nn.Module):
                     torch.nn.Dropout(0.5),
                 )
 
-    def ConvNet2():
+    def ConvNet2(self):
         # handle the image,multi-layer CNN network
         return  torch.nn.Sequential(
                     nn.Conv2d(
                         in_channels=3,      # input height
-                        out_channels=16,    # n_filters
+                        out_channels=3,    # n_filters
                         kernel_size=5,      # filter size
                         stride=1,           # filter movement/step
                         padding=2,      # 如果想要 con2d 出来的图片长宽没有变化, padding=(kernel_size-1)/2 当 stride=1
@@ -61,7 +61,7 @@ class lstmposemachine(nn.Module):
                     nn.MaxPool2d(kernel_size=2),
                 )
 
-    def ConvNet3():
+    def ConvNet3(self):
         # handle lstm output
         return  torch.nn.Sequential(
                     nn.Conv2d(
@@ -76,12 +76,21 @@ class lstmposemachine(nn.Module):
                 )
 
                     
-    def fuconLoss():
+    def fuconLoss(self):
         return  torch.nn.Sequential(
-                    torch.nn.Linear(16*120*140, 3*15*15), # 转成图片的大小
+                    nn.Conv2d(
+                        in_channels=16,      # input height
+                        out_channels=3,    # n_filters
+                        kernel_size=5,      # filter size
+                        stride=1,           # filter movement/step
+                        padding=2,      # 如果想要 con2d 出来的图片长宽没有变化, padding=(kernel_size-1)/2 当 stride=1
+                    ),      # output shape (16, 28, 28)
+                    nn.ReLU(),    # activation
+
+                    torch.nn.Linear(240, 240), # 转成图片的大小
                 )
 
-    def LSTM():
+    def LSTM(self):
         # LSTM
         return nn.LSTM(16, 16, 5)  #  ->   (input_size,hidden_size,num_layers)
 
@@ -89,16 +98,25 @@ class lstmposemachine(nn.Module):
         # ininet
         #   repeat stages for frame
 
+        print(images.shape)
         out = self.initnet(images[0])
+        print(out.shape)
         out = self.lossnet(out)
         hidden = None
 
         # 每个阶段输入 为 经过图片经过convnet2的输出，central Gaussian map， 上一次loss的输出
         for stage in range(self.stage):
             input = self.convnet2(images[stage])
-            out = torch.concat([out, self.gaussianmap, input], 0)
+            print(out.shape)
+            print(input.shape)
+            print(self.gaussianmap.shape)
+            print(out.dtype)
+            print(input.dtype)
+            print(self.gaussianmap.dtype)
+            out = torch.cat([out, input, self.gaussianmap], 1)
+            print(out.shape)
 
-            out, hidden = self.LSTM(out, hidden)
+            out, hidden = self.lstm(out, hidden)
 
             out = self.convnet3(out)
             out = self.lossnet(out)
@@ -107,22 +125,21 @@ class lstmposemachine(nn.Module):
 
     def genarate_gaussianmap(self):
         
-
-        x, y = np.mgrid[-1.0:1.0:256j, -1.0:1.0:256j]
+        seq, c, x, y = np.mgrid[-1.0:1.0:5j, -1.0:1.0:3j, -1.0:1.0:135j, -1.0:1.0:240j]
         # Need an (N, 2) array of (x, y) pairs.
-        xy = np.column_stack([, x.flat, y.flat])
+        xy = np.column_stack([seq.flat, c.flat, x.flat, y.flat])
 
-        mu = np.array([0.0, 0.0])
+        mu = np.array([0.0, 0.0, 0.0, 0.0])
 
-        sigma = np.array([.025, .025])
+        sigma = np.array([.025, .025,.025, .025])
         covariance = np.diag(sigma**2)
 
         z = multivariate_normal.pdf(xy, mean=mu, cov=covariance)
 
         # Reshape back to a (30, 30) grid.
-        z = z.reshape(c.shape)
+        z = z.reshape(x.shape)
 
-        return z
+        return torch.FloatTensor(z)
 
 def pck_score(predict, target, a, box):
     # box
