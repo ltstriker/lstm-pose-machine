@@ -2,6 +2,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch
 import numpy as np
+import numpy as np
+from scipy.stats import multivariate_normal
 
 
 class lstmposemachine(nn.Module):
@@ -19,7 +21,9 @@ class lstmposemachine(nn.Module):
         self.lstm = LSTM()
         self.convnet3 = ConvNet3()
         
+        self.gaussianmap = genarate_gaussianmap()
 
+        self.lossnet = fuconLoss()
         # self.testNet =  torch.nn.Sequential(
         #                     torch.nn.Linear(5*3*270*480, 100),
         #                     torch.nn.ReLU(),
@@ -85,12 +89,40 @@ class lstmposemachine(nn.Module):
         # ininet
         #   repeat stages for frame
 
+        out = self.initnet(images[0])
+        out = self.lossnet(out)
+        hidden = None
+
         # 每个阶段输入 为 经过图片经过convnet2的输出，central Gaussian map， 上一次loss的输出
+        for stage in range(self.stage):
+            input = self.convnet2(images[stage])
+            out = torch.concat([out, self.gaussianmap, input], 0)
 
-        # 注意LSTM复用隐藏层
+            out, hidden = self.LSTM(out, hidden)
 
-        return self.testNet(images.reshape(len(images),-1)).reshape(-1, 3, 13, 5)
+            out = self.convnet3(out)
+            out = self.lossnet(out)
 
+        return out
+
+    def genarate_gaussianmap(self):
+        
+
+        x, y = np.mgrid[-1.0:1.0:256j, -1.0:1.0:256j]
+        # Need an (N, 2) array of (x, y) pairs.
+        xy = np.column_stack([, x.flat, y.flat])
+
+        mu = np.array([0.0, 0.0])
+
+        sigma = np.array([.025, .025])
+        covariance = np.diag(sigma**2)
+
+        z = multivariate_normal.pdf(xy, mean=mu, cov=covariance)
+
+        # Reshape back to a (30, 30) grid.
+        z = z.reshape(c.shape)
+
+        return z
 
 def pck_score(predict, target, a, box):
     # box
