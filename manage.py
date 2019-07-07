@@ -45,12 +45,15 @@ device_ids = [0,1,2,3]
 if args.cuda & torch.cuda.is_available():
     device = torch.device("cuda")
     #define model
-    net = lstmposemachine(out=7, stage=3, device=device)
+    net = lstmposemachine(out=7, stage=5, device=device)
     net = net.cuda(device_ids[0])
     net = nn.DataParallel(net, device_ids=device_ids)
+    # net.load_state_dict(torch.load('./params/densnet_params_29.pt'))
+
+
 else:
     #define model
-    net = lstmposemachine(out=7, stage=3, device=device)
+    net = lstmposemachine(out=7, stage=7, device=device)
 
 print(device)
 

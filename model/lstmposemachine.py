@@ -26,7 +26,7 @@ class lstmposemachine(nn.Module):
         self.lossnet = self.fuconLoss()
 
         
-        self.resultnet = torch.nn.Linear(120 * 67, 3*13*5) # 转成图片的大小
+        self.resultnet = torch.nn.Linear(120 * 67, 3*13*stage) # 转成图片的大小
         # self.testNet =  torch.nn.Sequential(
         #                     torch.nn.Linear(5*3*270*480, 100),
         #                     torch.nn.ReLU(),
@@ -139,7 +139,7 @@ class lstmposemachine(nn.Module):
 
         out = out.view(batchsize, -1)
         out =self.resultnet(out)
-        return out.view(batchsize, 3, 13, 5)
+        return out.view(batchsize, 3, 13, self.stage)
 
     def genarate_gaussianmap(self, batchsize):
         
@@ -174,17 +174,17 @@ class pmMSELossFunc(nn.Module):
         bs, ddim, actionlen, seqlen = predict.shape
 
         sum = 0
-        MAXLEN = 270 * 480* 270 * 480
+        MAXLEN = (270 * 270 + 480 * 480) / 4
         for batchsize in range(bs):
             # 每批
             for seq in range(seqlen):
                 # 每张图片
                 for action in range(actionlen):
                     # 每个动作
-                    temp_sum = (target[batchsize][2][action][seq] - (predict[batchsize][2][action][seq]+0.5)//1 )**2 * MAXLEN
+                    temp_sum = (target[batchsize][2][action][seq] - predict[batchsize][2][action][seq])**2 *MAXLEN
                     temp_dis = (target[batchsize][1][action][seq] - predict[batchsize][1][action][seq])**2 \
                                     + (target[batchsize][0][action][seq] - predict[batchsize][0][action][seq])**2
-                    sum += max(temp_sum, temp_dis)
+                    sum += temp_sum+ temp_dis
         return sum/(bs*seqlen*actionlen)
 
 
